@@ -5,8 +5,15 @@ from pyquil.api import QVM, QVMConnection
 from pyquil.gates import MEASURE, CNOT, CZ, H, T
 from pyquil.noise import add_decoherence_noise
 
-from pyquil.gates import RZ, RX
-from numpy import pi
+from pyquil.operator_estimation import measure_observables
+from forest.benchmarking.compilation import basic_compile
+from forest.benchmarking.tomography import generate_state_tomography_experiment
+import forest.benchmarking.distance_measures as dm
+from forest.benchmarking.tomography import estimate_variance
+from forest.benchmarking.tomography import iterative_mle_state_estimate
+from functools import partial
+fast_tomo_est = partial(iterative_mle_state_estimate, epsilon=.0001, beta=.5, tol=1e-3)
+
 
 def hbb(num_trials):
     pq = Program()
@@ -45,8 +52,8 @@ def hbb(num_trials):
     pq += CZ(b, c)
 
     # Reconstruction of state
-    ro = pq.declare('ro', 'BIT', 1)
-    pq += MEASURE(c, ro[0])
+    #ro = pq.declare('ro', 'BIT', 1)
+    #pq += MEASURE(c, ro[0])
 
     #pq.wrap_in_numshots_loop(num_trials)
 
@@ -65,13 +72,27 @@ def run():
         compiled_pq = qc.compiler.quil_to_native_quil(pq)
         noisy = add_decoherence_noise(compiled_pq, T1=t1, T2=t2)
 
-        results = np.asarray(qvm.run(noisy, trials=1000))
-        prob_1 = np.sum(results) / float(results.size)
-        print(f"T1 = {t1}, T2 = {t2}")
-        print(f"Prob 0: {1 - prob_1}, prob 1: {prob_1}")
+        #results = np.asarray(qvm.run(noisy, trials=1000))
+        #prob_1 = np.sum(results) / float(results.size)
+        #print(f"T1 = {t1}, T2 = {t2}")
+        #print(f"Prob 0: {1 - prob_1}, prob 1: {prob_1}")
+
+        qubits = [3]
+        # NOTE: Ideally program is program=noisy
+        experiment = generate_state_tomography_experiment(program=pq, qubits=qubits)
+        tomo_results = list(measure_observables(qc=qc, tomo_experiment=experiment, n_shots=1_000))
+        print(tomo_results)
+
+        psi = np.array([[np.sqrt(0.85)], [np.sqrt(0.15)]])
+        rho_true = np.outer(psi, psi.T.conj())
+        print(rho_true.shape)
+
+        mle_est = estimate_variance(tomo_results, qubits, fast_tomo_est, dm.fidelity,
+                                    target_state=rho_true, n_resamples=40,
+                                    project_to_physical=True)
+        print(f"MLE estimate of fidelity is: {mle_est}")
+        return
 
 
 if __name__ == '__main__':
     run()
-
-
