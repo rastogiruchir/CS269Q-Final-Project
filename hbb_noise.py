@@ -5,8 +5,7 @@ from pyquil.api import QVM, QVMConnection
 from pyquil.gates import MEASURE, CNOT, CZ, H, T
 from pyquil.noise import add_decoherence_noise
 
-from pyquil.gates import RZ, RX
-from numpy import pi
+from matplotlib import pyplot as plt
 
 def hbb(num_trials):
     pq = Program()
@@ -56,19 +55,38 @@ def hbb(num_trials):
 def run():
     qvm = QVMConnection()
     qc = get_qc("9q-generic-qvm")
-    t1s = np.logspace(-6, -1, num=20)
+
+    pq = hbb(1000)
+    compiled_pq = qc.compiler.quil_to_native_quil(pq)
+    noiseless_results = np.asarray(qvm.run(compiled_pq, trials=1000))
+    noiseless_prob_1 = np.sum(noiseless_results) / noiseless_results.size
+
+    t1s = np.logspace(-7, -3, num=30)
+    xdata = []
+    ydata = []
     for t1 in t1s:
-        t2 = t1/2
-        pq = hbb(1000)
+        # NOTE: 1.5 ratio roughly corresponds to ratio found on Rigetti QPUs.
+        t2 = t1/1.5
         # NOTE: add_decoherence_noise() can only be called on programs with
         #       only RX, CZ, I, RZ gates.
-        compiled_pq = qc.compiler.quil_to_native_quil(pq)
-        noisy = add_decoherence_noise(compiled_pq, T1=t1, T2=t2)
+        noisy = add_decoherence_noise(compiled_pq, T1=t1, T2=t2, ro_fidelity=0.95)
 
         results = np.asarray(qvm.run(noisy, trials=1000))
         prob_1 = np.sum(results) / float(results.size)
         print(f"T1 = {t1}, T2 = {t2}")
         print(f"Prob 0: {1 - prob_1}, prob 1: {prob_1}")
+        xdata.append(t1)
+        ydata.append(1 - prob_1)
+
+    plt.plot(xdata, ydata, "o-")
+    plt.xscale("log")
+    #plt.ylim((0, 1))
+    plt.ylabel("Prob. 0")
+    plt.xlabel("T1 (s)")
+    # Plot noiseless probability.
+    plt.axhline(y=1 - noiseless_prob_1, color='r', linestyle='-')
+    plt.title("Probability of 0 state vs. T1 for HTH secret")
+    plt.show()
 
 
 if __name__ == '__main__':
