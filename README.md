@@ -1,6 +1,8 @@
 # CS269Q Final Project
 Group members: Franklin Jia, Marc Robert Wong, Ruchir Rastogi.
 
+Requirements: PyQuil, Grove, matplotlib, numpy.
+
 `hbb.py` is the initial implementation of the HBB protocol according to the Hillery et al. paper.
 
 `hbb_errors_different_states.py` and `hbb_errors_different_states_qcs.py` were used to measure the performance of a noisy QVM and a QPU on different secrets.
